@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, APIRouter
+from fastapi import UploadFile, File, APIRouter
 from typing import List, Dict, Any
 from io import BytesIO
 from logic.topic_extract import TopicExtractorAgent

@@ -75,14 +75,15 @@ class TopicExtractorAgent:
             hierarchy.append({
                 "id": topic_id,
                 "parent": parent_id,
-                "name": topic["name"]
+                "name": topic["name"],
+                "value": topic["percentage"]
             })
 
             # If the topic has subtopics, process them recursively
             if "subtopics" in topic:
                 subtopic_hierarchy = self.convert_to_hierarchy(
                     topic["subtopics"],
-                    parent_id=current_id
+                    parent_id=f"{current_id}"
                 )
                 hierarchy.extend(subtopic_hierarchy)
 
