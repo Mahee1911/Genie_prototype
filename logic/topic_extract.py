@@ -57,6 +57,35 @@ class TopicExtractorAgent:
             chain = prompt | self.llm
             response = chain.invoke({"text": all_text})
             parsed_response = json.loads(response.content)
-            return parsed_response
+
+            # Convert the response JSON to list format
+            return self.convert_to_hierarchy(parsed_response["topics"])
+
         except Exception as e:
             raise ValueError(f"Failed to process topics: {str(e)}")
+
+    def convert_to_hierarchy(self, data, parent_id=''):
+        """Function to convert the data to a hierarchy."""
+        hierarchy = []
+        current_id = 1
+
+        for topic in data:
+            # Create ID for the current topic
+            topic_id = f"{parent_id}.{current_id}" if parent_id else f"{current_id}"
+            hierarchy.append({
+                "id": topic_id,
+                "parent": parent_id,
+                "name": topic["name"]
+            })
+
+            # If the topic has subtopics, process them recursively
+            if "subtopics" in topic:
+                subtopic_hierarchy = self.convert_to_hierarchy(
+                    topic["subtopics"],
+                    parent_id=current_id
+                )
+                hierarchy.extend(subtopic_hierarchy)
+
+            current_id += 1
+
+        return hierarchy
