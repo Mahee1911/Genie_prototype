@@ -24,9 +24,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
         topic_data = topic_agent.extract_topics(docs)
 
         # Return the processed results
-        return {"files": [file.filename for file in files], "analysis": topic_data}
+        return {"files": [file.filename for file in files], "data": topic_data}
 
     except Exception as e:
         return {"error": str(e)}
-    
-
