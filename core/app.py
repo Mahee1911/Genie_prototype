@@ -6,7 +6,7 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://dev.inttent.app", "https://inttent.localhost.one2four.com"],
+    allow_origins=["https://dev.inttent.app", "https://inttent.localhost.one2four.com", "prototype-api.dev.inttent.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
