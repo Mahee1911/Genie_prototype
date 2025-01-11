@@ -15,8 +15,8 @@ class TopicExtractorAgent:
     def extract_topics(self, docs: List) -> Dict:
         """Extract topics and subtopics with their percentages."""
         template = """
-        You are a precise document analyzer. Analyze the following text and identify the main topics and subtopics.
-        Focus on the key themes and concepts that appear most frequently and are most significant.
+        You are an investment analyst working in M&A. You are receiving Confidential Information Memorandum, and you need to read and analyse the content quickly to assess whether the company is an interesting acquisition or investment target.
+        To do so, as a first step, you will need to understand the content of the document. Can you help classify the entire content of the document in topics and sub-topics (mutually exclusive). Just provide the complete list as a hierarchy (up to 3 levels) and how much content of the document refers to each topics as a percentage. Provide the results as a table for better readabilty.
 
         Guidelines:
         1. Identify 3-5 main topics that cover the major themes

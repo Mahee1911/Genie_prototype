@@ -5,11 +5,11 @@ app = FastAPI()
 
 # Add CORS middleware
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://dev.inttent.app", "https://inttent.localhost.one2four.com", "prototype-api.dev.inttent.app"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+   CORSMiddleware,
+   allow_origins=["https://dev.inttent.app", "https://inttent.localhost.one2four.com", "prototype-api.dev.inttent.app", "http://54.68.56.173/"],
+   allow_credentials=True,
+   allow_methods=["*"],
+   allow_headers=["*"],
 )
 
 @app.get("/")
