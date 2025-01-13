@@ -10,16 +10,15 @@ cors_config = {
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:4200",
+        "http://127.0.0.1:4200",
+        "https://inttent.localhost.one2four.com:4200",
         "https://dev.inttent.app",
         "https://inttent.localhost.one2four.com",
         "prototype-api.dev.inttent.app",
     ],
-    "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-    "expose_headers": ["Content-Range", "X-Content-Range"],
-    "supports_credentials": True,
-    "max_age": 600,  # Cache preflight requests for 10 minutes
-    "send_wildcard": False,
+    "methods": ["*"],
+    "allow_headers": ["*", "x-correlation-id"],
+    "supports_credentials": True
 }
 
 # Apply CORS to all routes
