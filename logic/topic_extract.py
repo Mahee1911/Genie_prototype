@@ -179,21 +179,30 @@ class TopicExtractorAgent:
             except Exception as e:
                 print(f"Error processing chunk {i}: {str(e)}")
 
+        # print(f"Combining results from {len(all_results)} chunks")
+        # final_result = self._combine_topic_results(all_results, "Combined Results")
+       
+        # # Convert the final result to hierarchy and return
+        # print("Converting to hierarchy")
+        # return self.flatten_hierarchy(final_result["topics"])
+
         final_result = self._combine_topic_results(all_results, "Combined Results")
 
+        # Step 1: Check if 'final_result["topics"]' is a list
         # Check if 'topics' is a list
         if isinstance(final_result.get("topics"), list):
             print("Found 'topics' as a list, proceeding to flatten.")
             # Step 2: Flatten the hierarchy
-            flat_list = self.convert_to_hierarchy(final_result["topics"])
+            flat_list = self.flatten_hierarchy(final_result["topics"])
         else:
             print(f"'topics' is not a list! Please check the structure of 'final_result': {final_result}")
             flat_list = []  # Set an empty list or handle the error accordingly
 
+
         # Now you can return or work with 'flat_list'
         return flat_list
 
-    def convert_to_hierarchy(self, data, parent_id=''):
+    def flatten_hierarchy(self, data, parent_id=''):
         """Flatten the data into a list with only id, parent, name, and other relevant fields."""
         flat_list = []
         current_id = 1
