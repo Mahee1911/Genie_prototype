@@ -10,7 +10,7 @@ def ping():
     return {"status": "ok", "message": "pong"}
 
 
-@router.route("/upload/", methods=['POST'])
+@router.route("/api/upload/", methods=['POST'])
 def upload_files():
     try:
         # Check if files were uploaded
