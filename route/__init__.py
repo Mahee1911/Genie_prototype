@@ -1,4 +1,5 @@
 from core.app import app
 from . import upload
 
-app.include_router(upload.router, prefix="/api", tags=["upload"])
+# Register the blueprint with the prefix
+app.register_blueprint(upload.router)

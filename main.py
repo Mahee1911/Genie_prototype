@@ -1,5 +1,8 @@
 import dotenv
 dotenv.load_dotenv()
 
-from core import app
-from route import *
+if __name__ == "__main__":
+    from core.app import app
+    from route import upload
+
+    app.run(host='0.0.0.0', port=8000, debug=True)

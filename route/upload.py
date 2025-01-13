@@ -1,17 +1,31 @@
-from fastapi import UploadFile, File, APIRouter
-from typing import List, Dict, Any
+from flask import Blueprint, request
 from io import BytesIO
 from logic.topic_extract import TopicExtractorAgent
 from logic.data_ingest import DataIngestionAgent
 
-router = APIRouter()
+router = Blueprint('upload', __name__)
+
+@router.route("/ping/", methods=['GET'])
+def ping():
+    return {"status": "ok", "message": "pong"}
 
 
-@router.post("/upload/")
-async def upload_files(files: List[UploadFile] = File(...)):
+@router.route("/upload/", methods=['POST'])
+def upload_files():
     try:
+        # Check if files were uploaded
+        if not request.files:
+            return {"error": "No files uploaded."}
+
+        files = request.files.getlist('files')
+        
         # Read PDF content
-        pdf_contents = [BytesIO(await file.read()) for file in files if file.content_type == "application/pdf"]
+        pdf_contents = [
+            BytesIO(file.read()) 
+            for file in files 
+            if file.content_type == "application/pdf"
+        ]
+        
         if not pdf_contents:
             return {"error": "No valid PDF files uploaded."}
 
@@ -24,7 +38,9 @@ async def upload_files(files: List[UploadFile] = File(...)):
         topic_data = topic_agent.extract_topics(docs)
 
         # Return the processed results
-        return {"files": [file.filename for file in files], "data": topic_data}
+        return {
+            "data": topic_data
+        }
 
     except Exception as e:
         return {"error": str(e)}
