@@ -135,15 +135,24 @@ class TopicExtractorAgent:
 
         prompt = PromptTemplate(input_variables=["text"], template=template)
 
-        chunk_size = 2  # Reduced chunk size for more detailed analysis
-        all_results = []
-        print(f"Processing {len(docs)} documents in chunks of {chunk_size}")
+        base_chunk_size = len(docs) // 8  # Integer division to determine the base chunk size
+        remainder = len(docs) % 8  # The remainder to handle leftover documents
 
-        for i in range(0, len(docs), chunk_size):
-            chunk_docs = docs[i:i+chunk_size]
+        # Adjust the chunk sizes dynamically, the first 'remainder' chunks will have one extra document
+        all_results = []
+        print(f"Processing {len(docs)} documents in chunks, with base chunk size {base_chunk_size} and {remainder} remainder documents.")
+
+        # Loop to process the documents in 8 chunks
+        start = 0
+        for i in range(8):
+            # Determine the chunk size for this iteration
+            current_chunk_size = base_chunk_size + (1 if i < remainder else 0)
+            
+            # Slice the docs for the current chunk
+            chunk_docs = docs[start:start + current_chunk_size]
             chunk_text = " ".join([doc.page_content for doc in chunk_docs])
 
-            print(f"Processing chunk {i}")
+            print(f"Processing chunk {i} with {len(chunk_docs)} documents")
             try:
                 result = prompt | self.llm
                 parsed_response = json.loads(result.invoke({"text": chunk_text}).content)
@@ -155,20 +164,23 @@ class TopicExtractorAgent:
                     print(f"Invalid response for chunk {i}, skipping.")
             except Exception as e:
                 print(f"Error processing chunk {i}: {str(e)}")
+            
+            # Update the start index for the next chunk
+            start += current_chunk_size
 
         final_result = self._combine_topic_results(all_results, "Combined Results")
 
         # Step 1: Check if 'final_result["topics"]' is a list
-        # Check if 'topics' is a list
         if isinstance(final_result.get("topics"), list):
             print("Found 'topics' as a list, proceeding to flatten.")
             # Step 2: Flatten the hierarchy
             flat_list = self.flatten_hierarchy(final_result["topics"])
         else:
             print(f"'topics' is not a list! Please check the structure of 'final_result': {final_result}")
-            flat_list = []  # Set an empty list or handle the error accordingly
+            flat_list = []  # Handle the error accordingly
 
         return flat_list
+
 
     def flatten_hierarchy(self, data, parent_id=''):
         """Flatten the data into a list with only id, parent, name, and other relevant fields."""
