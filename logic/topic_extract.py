@@ -21,29 +21,29 @@ class TopicExtractorAgent:
         You are an investment analyst working in M&A. You are receiving a Confidential Information Memorandum (CIM), and you need to quickly analyze the content to assess whether the company is an interesting acquisition or investment target. Your task is to classify the content of the document into topics, subtopics, and sub-subtopics (mutually exclusive). For each subtopic and sub-subtopic, provide 2 to 3 lines of content directly from the PDF to define that subtopic, with the exact citation pointing to the specific lines in the document.
 
         Structure the response as follows:
-        - Each main topic should include a list of subtopics with their name, percentage, content (2 to 3 lines of text from the document), and sub-subtopics if applicable.
+        - Each main topic should include a list of subtopics with their name, percentage value, content (2 to 3 lines of text from the document), and sub-subtopics if applicable.
         - Cite the exact location from the document (e.g., page number and line range) from which the content was extracted.
-        - Ensure that the percentages of each level (main topic, subtopic, sub-subtopic) sum up appropriately.
+        - Ensure that the percentage values of each level (main topic, subtopic, sub-subtopic) sum up appropriately.
 
         Return the response as a JSON object structured like this:
         {{
             "topics": [
                 {{
                     "name": "Main Topic Name",
-                    "percentage": number,
-                    "value": "Content/Excerpt from Document (2-3 lines)",
+                    "value": number,
+                    "citation": "Content/Excerpt from Document (2-3 lines)",
                     "pages": "Page 3, Lines 15-18",
                     "subtopics": [
                         {{
                             "name": "Subtopic Name",
-                            "percentage": number,
-                            "value": "Content/Excerpt from Document (2-3 lines)",
+                            "value": number,
+                            "citation": "Content/Excerpt from Document (2-3 lines)",
                             "pages": "Page 5, Lines 20-23",
                             "subsubtopics": [
                                 {{
                                     "name": "Sub-Subtopic Name",
-                                    "percentage": number,
-                                    "value": "Content/Excerpt from Document (2-3 lines)",
+                                    "value": number,
+                                    "citation": "Content/Excerpt from Document (2-3 lines)",
                                     "pages": "Page 8, Lines 10-12"
                                 }}
                             ]
@@ -64,8 +64,8 @@ class TopicExtractorAgent:
 
         Guidelines:
         1. Identify common themes across all analyses.
-        2. Merge similar topics and adjust percentages accordingly.
-        3. Ensure accurate percentage distribution.
+        2. Merge similar topics and adjust values accordingly.
+        3. Ensure accurate value distribution.
         4. Prioritize topics that appear consistently across chunks.
 
         Return a JSON object with the structure:
@@ -73,20 +73,20 @@ class TopicExtractorAgent:
             "topics": [
                 {{
                     "name": "Specific Main Topic Name",
-                    "percentage": number,
-                    "value": "Text Content",
+                    "value": number,
+                    "citation": "Text Content",
                     "pages": "Page Numbers and Line Ranges",
                     "subtopics": [
                         {{
                             "name": "Specific Subtopic Name",
-                            "percentage": number,
-                            "value": "Text Content",
+                            "value": number,
+                            "citation": "Text Content",
                             "pages": "Page Numbers and Line Ranges",
                             "subsubtopics": [
                                 {{
                                     "name": "Specific Sub-Subtopic Name",
-                                    "percentage": number,
-                                    "value": "Text Content",
+                                    "value": number,
+                                    "citation": "Text Content",
                                     "pages": "Page Numbers and Line Ranges"
                                 }}
                             ]
@@ -97,10 +97,10 @@ class TopicExtractorAgent:
         }}
 
         Requirements:
-        1. All percentages must be numbers.
+        1. All values must be numbers.
         2. Main topics must sum to 100% and have their content and page info.
-        3. Subtopic percentages must sum to their parent topic's percentage and have their content and page info.
-        4. Sub-subtopic percentages must sum to their parent subtopic's percentage and have their content and page info.
+        3. Subtopic values must sum to their parent topic's values and have their content and page info.
+        4. Sub-subtopic values must sum to their parent subtopic's values and have their content and page info.
         """
         self.combine_prompt = PromptTemplate(input_variables=["text"], template=self.combine_template)
 
@@ -175,11 +175,11 @@ class TopicExtractorAgent:
 
     def _validate_and_normalize_percentages(self, parsed_response: Dict) -> Dict:
         """Validate and normalize topic percentages"""
-        total_percentage = sum(topic['percentage'] for topic in parsed_response['topics'])
+        total_percentage = sum(topic['value'] for topic in parsed_response['topics'])
         if total_percentage != 100:
             print(f"Warning: Total percentage is {total_percentage}. Normalizing percentages.")
             for topic in parsed_response['topics']:
-                topic['percentage'] = topic['percentage'] / total_percentage * 100
+                topic['value'] = topic['value'] / total_percentage * 100
         return parsed_response
 
     def _combine_topic_results(self, results: List[Dict], doc_name: str) -> Dict:
@@ -195,9 +195,9 @@ class TopicExtractorAgent:
                 return False
 
             for topic in parsed_response["topics"]:
-                if "percentage" not in topic or not isinstance(topic["percentage"], (int, float)):
+                if "value" not in topic or not isinstance(topic["value"], (int, float)):
                     return False
-                if topic["percentage"] < 0 or topic["percentage"] > 100:
+                if topic["value"] < 0 or topic["value"] > 100:
                     return False
 
             return True
@@ -222,7 +222,7 @@ class TopicExtractorAgent:
                 "parent": parent_id,
                 "name": topic["name"],
                 "value": topic.get("value", ""),
-                "percentage": topic.get("percentage", 0),
+                "citation": topic.get("citation", ""),
                 "pages": topic.get("pages", ""),
             })
 
