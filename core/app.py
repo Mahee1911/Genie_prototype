@@ -18,7 +18,7 @@ cors_config = {
     ],
     "methods": ["*"],
     "allow_headers": ["*", "x-correlation-id"],
-    "supports_credentials": True
+    "supports_credentials": True,
 }
 
 # Apply CORS to all routes
