@@ -5,39 +5,29 @@ from logic.data_ingest import DataIngestionAgent
 
 router = Blueprint('upload', __name__)
 
-@router.route("/ping/", methods=['GET'])
-def ping():
-    return {"status": "ok", "message": "pong"}
-
-
 @router.route("/api/upload/", methods=['POST'])
 def upload_files():
     try:
-        # Check if files were uploaded
         if not request.files:
             return {"error": "No files uploaded."}
 
         files = request.files.getlist('files')
         
-        # Read PDF content
         pdf_contents = [
             BytesIO(file.read()) 
             for file in files 
             if file.content_type == "application/pdf"
         ]
-        
+    
         if not pdf_contents:
             return {"error": "No valid PDF files uploaded."}
 
-        # Process documents
         ingestion_agent = DataIngestionAgent()
-        docs, _ = ingestion_agent.process_documents(pdf_contents)
+        docs, vector_db = ingestion_agent.process_documents(pdf_contents)
 
-        # Extract topics
-        topic_agent = TopicExtractorAgent()
+        topic_agent = TopicExtractorAgent(vector_db=vector_db)
         topic_data = topic_agent.extract_topics(docs)
-
-        # Return the processed results
+        print(f"Embeddings created with {len(docs)} chunks.")
         return {
             "data": topic_data
         }

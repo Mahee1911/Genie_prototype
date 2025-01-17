@@ -1,22 +1,28 @@
-from langchain.prompts import PromptTemplate
+from langchain.prompts import PromptTemplate 
 from const.key import MODEL
 from typing import Dict, List
 import json
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from langchain_openai import ChatOpenAI
-from langchain.chains import LLMChain
+from langchain_community.vectorstores import FAISS
+import asyncio
 
 class TopicExtractorAgent:
-    def __init__(self):
+    def __init__(self, vector_db: FAISS = None):
+        if vector_db:
+            self.vector_db = vector_db
+        else:
+            raise ValueError("A vector database is required for topic extraction.")
+
         self.llm = ChatOpenAI(
             temperature=0.2,
             model=MODEL,
             model_kwargs={"response_format": {"type": "json_object"}}
         )
+        self.retriever = self.vector_db.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+
         self.executor = ThreadPoolExecutor(max_workers=8)
         
-        # Define the main analysis template
         self.template = """
         You are an investment analyst working in M&A. You are receiving a Confidential Information Memorandum (CIM), and you need to quickly analyze the content to assess whether the company is an interesting acquisition or investment target. Your task is to classify the content of the document into topics, subtopics, and sub-subtopics (mutually exclusive). For each subtopic and sub-subtopic, provide 2 to 3 lines of content directly from the PDF to define that subtopic, with the exact citation pointing to the specific lines in the document.
 
@@ -31,20 +37,20 @@ class TopicExtractorAgent:
                 {{
                     "name": "Main Topic Name",
                     "value": number,
-                    "citation": "Content/Excerpt from Document (2-3 lines)",
-                    "pages": "Page 3, Lines 15-18",
+                    "citation": "Text Content",
+                    "pages": "Page Numbers and Line Ranges",
                     "subtopics": [
                         {{
                             "name": "Subtopic Name",
                             "value": number,
-                            "citation": "Content/Excerpt from Document (2-3 lines)",
-                            "pages": "Page 5, Lines 20-23",
+                            "citation": "Text Content",
+                            "pages": "Page Numbers and Line Ranges",
                             "subsubtopics": [
                                 {{
                                     "name": "Sub-Subtopic Name",
                                     "value": number,
-                                    "citation": "Content/Excerpt from Document (2-3 lines)",
-                                    "pages": "Page 8, Lines 10-12"
+                                    "citation": "Text Content",
+                                    "pages": "Page Numbers and Line Ranges"
                                 }}
                             ]
                         }}
@@ -57,7 +63,6 @@ class TopicExtractorAgent:
         """
         self.prompt = PromptTemplate(input_variables=["text"], template=self.template)
 
-        # Define the combine template
         self.combine_template = """
         You are an expert topic analyzer. Combine these separate analyses into one coherent structure.
         Previous analyses: {text}
@@ -104,20 +109,59 @@ class TopicExtractorAgent:
         """
         self.combine_prompt = PromptTemplate(input_variables=["text"], template=self.combine_template)
 
+    def _distribute_values_proportionally(self, data: Dict) -> Dict:
+        """Distribute values based on word or line length"""
+        for topic in data["topics"]:
+            topic_length = len(topic.get("citation", "").split())
+            topic["value"] = round(topic["value"], 2)
+            if "subtopics" in topic:
+                total_sub_lengths = sum(len(sub["citation"].split()) for sub in topic["subtopics"])
+                for sub in topic["subtopics"]:
+                    sub_length = len(sub["citation"].split())
+                    sub["value"] = round((sub_length / total_sub_lengths) * topic["value"], 2)
+                    if "subsubtopics" in sub:
+                        total_subsub_lengths = sum(len(subsub["citation"].split()) for subsub in sub["subsubtopics"])
+                        for subsub in sub["subsubtopics"]:
+                            subsub_length = len(subsub["citation"].split())
+                            subsub["value"] = round((subsub_length / total_subsub_lengths) * sub["value"], 2)
+        return data
+
+    def _validate_response(self, response: Dict) -> bool:
+        """Check if the response is valid"""
+        try:
+            for topic in response["topics"]:
+                if not isinstance(topic["value"], (int, float)):
+                    return False
+                if "subtopics" in topic:
+                    sub_total = sum(sub["value"] for sub in topic["subtopics"])
+                    if round(sub_total, 2) != round(topic["value"], 2):
+                        return False
+                    for sub in topic["subtopics"]:
+                        if "subsubtopics" in sub:
+                            subsub_total = sum(subsub["value"] for subsub in sub["subsubtopics"])
+                            if round(subsub_total, 2) != round(sub["value"], 2):
+                                return False
+            return True
+        except KeyError:
+            return False
     async def process_chunk(self, chunk_docs: List, chunk_index: int) -> Dict:
-        """Process a single chunk of documents"""
+        """Process a single chunk of documents and retrieve context for LLM"""
         chunk_text = " ".join([doc.page_content for doc in chunk_docs])
         print(f"Processing chunk {chunk_index} with {len(chunk_docs)} documents")
-        
+
         try:
+            context = self.retriever.get_relevant_documents(chunk_text)
+
+            input_text = chunk_text + "\n" + "\n".join([doc.page_content for doc in context])
+
             result = self.prompt | self.llm
             response = await asyncio.get_event_loop().run_in_executor(
                 self.executor,
-                lambda: result.invoke({"text": chunk_text})
+                lambda: result.invoke({"text": input_text})
             )
-            
+
             parsed_response = json.loads(response.content)
-            parsed_response = self._validate_and_normalize_percentages(parsed_response)
+            parsed_response = self._distribute_values_proportionally(parsed_response)
 
             if self._validate_response(parsed_response):
                 return parsed_response
@@ -128,8 +172,9 @@ class TopicExtractorAgent:
             print(f"Error processing chunk {chunk_index}: {str(e)}")
             return None
 
+
     async def extract_topics_async(self, docs: List) -> List:
-        """Asynchronous version of extract_topics"""
+        """Asynchronous version of extract_topics with RAG concept"""
         base_chunk_size = len(docs) // 8
         remainder = len(docs) % 8
         tasks = []
@@ -137,29 +182,23 @@ class TopicExtractorAgent:
 
         print(f"Processing {len(docs)} documents in chunks, with base chunk size {base_chunk_size} and {remainder} remainder documents.")
 
-        # Create tasks for all chunks
         for i in range(8):
             current_chunk_size = base_chunk_size + (1 if i < remainder else 0)
             chunk_docs = docs[start:start + current_chunk_size]
-            
+
             task = asyncio.create_task(self.process_chunk(chunk_docs, i))
             tasks.append(task)
-            
+
             start += current_chunk_size
 
-        # Wait for all tasks to complete
         results = await asyncio.gather(*tasks)
-        
-        # Filter out None results
-        all_results = [r for r in results if r is not None]
 
-        # Combine results
+        all_results = [result for result in results if result is not None]
         final_result = await asyncio.get_event_loop().run_in_executor(
             self.executor,
             lambda: self._combine_topic_results(all_results, "Combined Results")
         )
 
-        # Flatten the hierarchy
         if isinstance(final_result.get("topics"), list):
             print("Found 'topics' as a list, proceeding to flatten.")
             flat_list = self.flatten_hierarchy(final_result["topics"])
@@ -187,24 +226,7 @@ class TopicExtractorAgent:
         combined_text = json.dumps(results)
         response = self.combine_prompt | self.llm
         return json.loads(response.invoke({"text": combined_text}).content)
-
-    def _validate_response(self, parsed_response: Dict) -> bool:
-        """Validate if the response structure is correct"""
-        try:
-            if "topics" not in parsed_response or not isinstance(parsed_response["topics"], list):
-                return False
-
-            for topic in parsed_response["topics"]:
-                if "value" not in topic or not isinstance(topic["value"], (int, float)):
-                    return False
-                if topic["value"] < 0 or topic["value"] > 100:
-                    return False
-
-            return True
-        except Exception as e:
-            print(f"Error in validation: {str(e)}")
-            return False
-
+        
     def flatten_hierarchy(self, data, parent_id=''):
         """Flatten the data into a list with only id, parent, name, and other relevant fields"""
         flat_list = []
