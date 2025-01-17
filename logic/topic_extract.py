@@ -1,11 +1,12 @@
-from langchain.prompts import PromptTemplate 
-from const.key import MODEL
-from typing import Dict, List
-import json
-from concurrent.futures import ThreadPoolExecutor
-from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
 import asyncio
+import json
+from typing import Dict, List
+from const.key import MODEL
+from concurrent.futures import ThreadPoolExecutor
 
 class TopicExtractorAgent:
     def __init__(self, vector_db: FAISS = None):
@@ -19,10 +20,10 @@ class TopicExtractorAgent:
             model=MODEL,
             model_kwargs={"response_format": {"type": "json_object"}}
         )
-        self.retriever = self.vector_db.as_retriever(search_type="similarity", search_kwargs={"k": 5})
-
-        self.executor = ThreadPoolExecutor(max_workers=8)
         
+        self.retriever = self.vector_db.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+        self.executor = ThreadPoolExecutor(max_workers=8)
+
         self.template = """
         You are an investment analyst working in M&A. You are receiving a Confidential Information Memorandum (CIM), and you need to quickly analyze the content to assess whether the company is an interesting acquisition or investment target. Your task is to classify the content of the document into topics, subtopics, and sub-subtopics (mutually exclusive). For each subtopic and sub-subtopic, provide 2 to 3 lines of content directly from the PDF to define that subtopic, with the exact citation pointing to the specific lines in the document.
 
@@ -60,8 +61,10 @@ class TopicExtractorAgent:
         }}
 
         Text for analysis: {text}
-        """
+        """       
         self.prompt = PromptTemplate(input_variables=["text"], template=self.template)
+        
+        self.llm_chain = LLMChain(llm=self.llm, prompt=self.prompt)
 
         self.combine_template = """
         You are an expert topic analyzer. Combine these separate analyses into one coherent structure.
@@ -107,7 +110,10 @@ class TopicExtractorAgent:
         3. Subtopic values must sum to their parent topic's values and have their content and page info.
         4. Sub-subtopic values must sum to their parent subtopic's values and have their content and page info.
         """
+        
         self.combine_prompt = PromptTemplate(input_variables=["text"], template=self.combine_template)
+        
+        self.combine_llm_chain = LLMChain(llm=self.llm, prompt=self.combine_prompt)
 
     def _distribute_values_proportionally(self, data: Dict) -> Dict:
         """Distribute values based on word or line length"""
@@ -144,23 +150,27 @@ class TopicExtractorAgent:
             return True
         except KeyError:
             return False
+
     async def process_chunk(self, chunk_docs: List, chunk_index: int) -> Dict:
-        """Process a single chunk of documents and retrieve context for LLM"""
+        """Process a single chunk of documents using the LLMChain."""
         chunk_text = " ".join([doc.page_content for doc in chunk_docs])
         print(f"Processing chunk {chunk_index} with {len(chunk_docs)} documents")
 
         try:
-            context = self.retriever.get_relevant_documents(chunk_text)
+            context = self.retriever.get_relevant_documents(chunk_text) 
 
-            input_text = chunk_text + "\n" + "\n".join([doc.page_content for doc in context])
+            input_text = chunk_text + "\n" + "\n".join([getattr(doc, 'page_content', '') for doc in context])
 
-            result = self.prompt | self.llm
             response = await asyncio.get_event_loop().run_in_executor(
                 self.executor,
-                lambda: result.invoke({"text": input_text})
+                lambda: self.llm_chain.run({"text": input_text})
             )
 
-            parsed_response = json.loads(response.content)
+            try:
+                parsed_response = json.loads(response)
+            except json.JSONDecodeError:
+                print(f"Invalid JSON response for chunk {chunk_index}: {response}")
+                return None
             parsed_response = self._distribute_values_proportionally(parsed_response)
 
             if self._validate_response(parsed_response):
@@ -172,9 +182,8 @@ class TopicExtractorAgent:
             print(f"Error processing chunk {chunk_index}: {str(e)}")
             return None
 
-
     async def extract_topics_async(self, docs: List) -> List:
-        """Asynchronous version of extract_topics with RAG concept"""
+        """Asynchronous version of extract_topics with LLMChain."""
         base_chunk_size = len(docs) // 8
         remainder = len(docs) % 8
         tasks = []
@@ -196,7 +205,7 @@ class TopicExtractorAgent:
         all_results = [result for result in results if result is not None]
         final_result = await asyncio.get_event_loop().run_in_executor(
             self.executor,
-            lambda: self._combine_topic_results(all_results, "Combined Results")
+            lambda: self._combine_topic_results(all_results)
         )
 
         if isinstance(final_result.get("topics"), list):
@@ -211,22 +220,13 @@ class TopicExtractorAgent:
     def extract_topics(self, docs: List) -> List:
         """Synchronous wrapper for extract_topics_async"""
         return asyncio.run(self.extract_topics_async(docs))
-
-    def _validate_and_normalize_percentages(self, parsed_response: Dict) -> Dict:
-        """Validate and normalize topic percentages"""
-        total_percentage = sum(topic['value'] for topic in parsed_response['topics'])
-        if total_percentage != 100:
-            print(f"Warning: Total percentage is {total_percentage}. Normalizing percentages.")
-            for topic in parsed_response['topics']:
-                topic['value'] = topic['value'] / total_percentage * 100
-        return parsed_response
-
-    def _combine_topic_results(self, results: List[Dict], doc_name: str) -> Dict:
-        """Combine and normalize topic results from multiple chunks"""
-        combined_text = json.dumps(results)
-        response = self.combine_prompt | self.llm
-        return json.loads(response.invoke({"text": combined_text}).content)
         
+    def _combine_topic_results(self, results: List[Dict]) -> Dict:
+        """Combine and normalize topic results from multiple chunks."""
+        combined_text = json.dumps(results)
+        response = self.combine_llm_chain.run({"text": combined_text})
+        return json.loads(response)
+
     def flatten_hierarchy(self, data, parent_id=''):
         """Flatten the data into a list with only id, parent, name, and other relevant fields"""
         flat_list = []
