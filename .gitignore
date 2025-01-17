@@ -171,5 +171,4 @@ cython_debug/
 .pypirc
 .DS_Store
 .vscode/
-
-# files
+faiss_index/

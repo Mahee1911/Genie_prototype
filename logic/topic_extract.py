@@ -18,7 +18,10 @@ class TopicExtractorAgent:
         self.llm = ChatOpenAI(
             temperature=0.2,
             model=MODEL,
-            model_kwargs={"response_format": {"type": "json_object"}}
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )
+        self.retriever = self.vector_db.as_retriever(
+            search_type="similarity", search_kwargs={"k": 5}
         )
         
         self.retriever = self.vector_db.as_retriever(search_type="similarity", search_kwargs={"k": 5})
@@ -121,15 +124,24 @@ class TopicExtractorAgent:
             topic_length = len(topic.get("citation", "").split())
             topic["value"] = round(topic["value"], 2)
             if "subtopics" in topic:
-                total_sub_lengths = sum(len(sub["citation"].split()) for sub in topic["subtopics"])
+                total_sub_lengths = sum(
+                    len(sub["citation"].split()) for sub in topic["subtopics"]
+                )
                 for sub in topic["subtopics"]:
                     sub_length = len(sub["citation"].split())
-                    sub["value"] = round((sub_length / total_sub_lengths) * topic["value"], 2)
+                    sub["value"] = round(
+                        (sub_length / total_sub_lengths) * topic["value"], 2
+                    )
                     if "subsubtopics" in sub:
-                        total_subsub_lengths = sum(len(subsub["citation"].split()) for subsub in sub["subsubtopics"])
+                        total_subsub_lengths = sum(
+                            len(subsub["citation"].split())
+                            for subsub in sub["subsubtopics"]
+                        )
                         for subsub in sub["subsubtopics"]:
                             subsub_length = len(subsub["citation"].split())
-                            subsub["value"] = round((subsub_length / total_subsub_lengths) * sub["value"], 2)
+                            subsub["value"] = round(
+                                (subsub_length / total_subsub_lengths) * sub["value"], 2
+                            )
         return data
 
     def _validate_response(self, response: Dict) -> bool:
@@ -173,7 +185,7 @@ class TopicExtractorAgent:
                 return None
             parsed_response = self._distribute_values_proportionally(parsed_response)
 
-            if self._validate_response(parsed_response):
+            if validate_response(parsed_response):
                 return parsed_response
             else:
                 print(f"Invalid response for chunk {chunk_index}, skipping.")
@@ -189,11 +201,13 @@ class TopicExtractorAgent:
         tasks = []
         start = 0
 
-        print(f"Processing {len(docs)} documents in chunks, with base chunk size {base_chunk_size} and {remainder} remainder documents.")
+        print(
+            f"Processing {len(docs)} documents in chunks, with base chunk size {base_chunk_size} and {remainder} remainder documents."
+        )
 
         for i in range(8):
             current_chunk_size = base_chunk_size + (1 if i < remainder else 0)
-            chunk_docs = docs[start:start + current_chunk_size]
+            chunk_docs = docs[start : start + current_chunk_size]
 
             task = asyncio.create_task(self.process_chunk(chunk_docs, i))
             tasks.append(task)
@@ -210,9 +224,11 @@ class TopicExtractorAgent:
 
         if isinstance(final_result.get("topics"), list):
             print("Found 'topics' as a list, proceeding to flatten.")
-            flat_list = self.flatten_hierarchy(final_result["topics"])
+            flat_list = flatten_hierarchy(final_result["topics"])
         else:
-            print(f"'topics' is not a list! Please check the structure of 'final_result': {final_result}")
+            print(
+                f"'topics' is not a list! Please check the structure of 'final_result': {final_result}"
+            )
             flat_list = []
 
         return flat_list
