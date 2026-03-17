@@ -158,23 +158,12 @@ The API service will start and begin accepting requests.
 
 ## Potential Use Cases
 
-• Document similarity detection
-• Knowledge discovery systems
-• Enterprise document intelligence
-• Research paper comparison
-• AI-powered document search
+- Document similarity detection
+- Knowledge discovery systems
+- Enterprise document intelligence
+- Research paper comparison
+- AI-powered document search
 
----
-
-## Future Improvements
-
-• Add transformer-based embeddings
-• Implement vector database integration
-• Build a web UI for document upload
-• Add semantic search capabilities
-• Support large-scale document processing
-
----
 
 ## Author
 
